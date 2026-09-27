@@ -1,0 +1,62 @@
+alias: Rain warning at front door
+description: Pulses a lamp from an orange baseline, coloured by the rain outlook
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.examplesensor
+    to: "on"
+    for:
+      hours: 0
+      minutes: 0
+      seconds: 1
+actions:
+  - action: weather.get_forecasts
+    target:
+      entity_id: weather.examplehome
+    data:
+      type: hourly
+    response_variable: result
+  - variables:
+      next3: "{{ result['weather.examplehome'].forecast[:3] }}"
+      rain_mm: >-
+        {{ next3 | map(attribute='precipitation', default=0)
+           | select('number') | sum | round(2) }}
+      rain_hours: >-
+        {{ next3 | map(attribute='condition')
+           | select('in', ['rainy', 'pouring', 'lightning-rainy'])
+           | list | count }}
+  - variables:
+      baseline_color: [255, 137, 49]
+      rain_level: >-
+        {% if rain_mm >= 1.0 or rain_hours >= 2 %}heavy{% elif rain_mm >= 0.1 or rain_hours >= 1 %}light{% else %}none{% endif %}
+      pulse_color: >-
+        {{ {'heavy': [0, 45, 200], 'light': [130, 195, 255], 'none': [150, 60, 0]}[rain_level] }}
+      pulse_brightness: "{{ {'heavy': 100, 'light': 75, 'none': 45}[rain_level] }}"
+  - action: light.turn_on
+    target:
+      entity_id: light.examplelight
+    data:
+      rgb_color: "{{ baseline_color }}"
+      brightness_pct: 60
+      transition: 2
+  - delay: "00:00:02"
+  - repeat:
+      count: 3
+      sequence:
+        - action: light.turn_on
+          target:
+            entity_id: light.examplelight
+          data:
+            rgb_color: "{{ pulse_color }}"
+            brightness_pct: "{{ pulse_brightness }}"
+            transition: 3
+        - delay: "00:00:04"
+        - action: light.turn_on
+          target:
+            entity_id: light.examplelight
+          data:
+            rgb_color: "{{ baseline_color }}"
+            brightness_pct: 60
+            transition: 3
+        - delay: "00:00:04"
+mode: single
+max_exceeded: silent

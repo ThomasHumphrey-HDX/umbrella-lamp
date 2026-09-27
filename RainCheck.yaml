@@ -1,0 +1,31 @@
+alias: Rain check - next 6 hours
+description: Sets input_boolean.examplerain based on forecast rainfall
+triggers:
+  - trigger: time_pattern
+    minutes: "/15"
+  - trigger: homeassistant
+    event: start
+actions:
+  - action: weather.get_forecasts
+    target:
+      entity_id: weather.examplehome
+    data:
+      type: hourly
+    response_variable: result
+  - variables:
+      rain_total: >
+        {{ result['weather.examplehome'].forecast[:6]
+           | map(attribute='precipitation', default=0)
+           | select('number') | sum | round(2) }}
+  - if:
+      - condition: template
+        value_template: "{{ rain_total > 0.3 }}"
+    then:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.examplerain
+    else:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.examplerain
+mode: single
